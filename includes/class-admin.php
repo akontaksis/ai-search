@@ -300,6 +300,7 @@ class Admin {
 			const nonce    = '<?php echo esc_js( wp_create_nonce( 'ais_enhance_nonce' ) ); ?>';
 			const total    = <?php echo (int) $total; ?>;
 			let   done     = total - <?php echo (int) $pending; ?>;
+			const DELAY_MS = 13000; // 5 req/min = 1 req/12s, +1s buffer
 
 			btn.addEventListener('click', function () {
 				btn.disabled = true;
@@ -328,7 +329,14 @@ class Admin {
 							: '';
 
 						if (res.data.remaining > 0) {
-							processNext();
+							const remaining = res.data.remaining;
+							let countdown = Math.ceil(DELAY_MS / 1000);
+							const timer = setInterval(() => {
+								countdown--;
+								status.textContent = 'Αναμονή ' + countdown + 's… (εκκρεμούν ' + remaining + ')';
+								if (countdown <= 0) clearInterval(timer);
+							}, 1000);
+							setTimeout(processNext, DELAY_MS);
 						} else {
 							status.textContent = '✓ Ολοκληρώθηκε! Ανανεώστε τη σελίδα.';
 							btn.textContent = 'AI Enhance (0 εκκρεμούν)';
