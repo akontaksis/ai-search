@@ -23,6 +23,14 @@ class Admin {
 			'ais-settings',
 			[ $this, 'render_settings_page' ]
 		);
+		add_submenu_page(
+			'options-general.php',
+			'AI Search — Dashboard',
+			'AI Search Dashboard',
+			'manage_options',
+			'ais-dashboard',
+			[ $this, 'render_dashboard' ]
+		);
 	}
 
 	public function register_settings(): void {
@@ -499,4 +507,156 @@ class Admin {
 		<?php endif; ?>
 		<?php
 	}
+
+	public function render_dashboard(): void {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		global $wpdb;
+		$log   = $wpdb->prefix . 'ai_search_log';
+		$index = $wpdb->prefix . 'ai_search_index';
+
+		$total_queries  = (int) $wpdb->get_var( "SELECT COUNT(*) FROM $log" );
+		$today_queries  = (int) $wpdb->get_var( $wpdb->prepare(
+			"SELECT COUNT(*) FROM $log WHERE DATE(created_at) = %s", current_time( 'Y-m-d' )
+		) );
+		$week_queries   = (int) $wpdb->get_var(
+			"SELECT COUNT(*) FROM $log WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)"
+		);
+		$cache_hits     = (int) $wpdb->get_var( "SELECT COUNT(*) FROM $log WHERE cache_hit = 1" );
+		$no_results     = (int) $wpdb->get_var( "SELECT COUNT(*) FROM $log WHERE matched_index_id IS NULL AND cache_hit = 0" );
+		$avg_response   = (int) $wpdb->get_var( "SELECT AVG(response_time_ms) FROM $log WHERE response_time_ms > 0" );
+		$indexed_total  = (int) $wpdb->get_var( "SELECT COUNT(*) FROM $index" );
+		$enhanced_total = (int) $wpdb->get_var( "SELECT COUNT(*) FROM $index WHERE category IS NOT NULL" );
+
+		$cache_pct    = $total_queries > 0 ? round( ( $cache_hits / $total_queries ) * 100 ) : 0;
+		$noresult_pct = $total_queries > 0 ? round( ( $no_results / $total_queries ) * 100 ) : 0;
+
+		$top_queries = $wpdb->get_results(
+			"SELECT query, COUNT(*) as cnt FROM $log
+			 WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+			 GROUP BY query ORDER BY cnt DESC LIMIT 20"
+		);
+
+		$failed_queries = $wpdb->get_results(
+			"SELECT query, COUNT(*) as cnt FROM $log
+			 WHERE matched_index_id IS NULL AND cache_hit = 0
+			   AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+			 GROUP BY query ORDER BY cnt DESC LIMIT 20"
+		);
+
+		$daily = $wpdb->get_results(
+			"SELECT DATE(created_at) as day, COUNT(*) as cnt FROM $log
+			 WHERE created_at >= DATE_SUB(NOW(), INTERVAL 14 DAY)
+			 GROUP BY DATE(created_at) ORDER BY day ASC"
+		);
+		?>
+		<div class="wrap">
+			<h1>AI Search — Dashboard</h1>
+			<p><a href="<?php echo esc_url( admin_url( 'options-general.php?page=ais-settings' ) ); ?>">← Ρυθμίσεις</a></p>
+
+			<style>
+			.ais-stats{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:24px;}
+			.ais-stat{background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:16px 20px;min-width:130px;flex:1;}
+			.ais-stat .num{font-size:32px;font-weight:700;color:#0073aa;line-height:1;}
+			.ais-stat .lbl{font-size:12px;color:#888;margin-top:4px;}
+			.ais-stat.warn .num{color:#b26200;}.ais-stat.good .num{color:#1a7431;}
+			.ais-dash-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px;}
+			.ais-panel{background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:16px 20px;}
+			.ais-panel h3{margin:0 0 12px;font-size:12px;text-transform:uppercase;color:#888;letter-spacing:.05em;}
+			.ais-bar-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:13px;}
+			.ais-bar-row .lbl{width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+			.ais-bar-row .bar{flex:1;background:#f0f0f0;border-radius:4px;height:10px;}
+			.ais-bar-row .bar-fill{background:#0073aa;height:100%;border-radius:4px;}
+			.ais-bar-row .cnt{width:30px;text-align:right;color:#888;}
+			@media(max-width:782px){.ais-dash-grid{grid-template-columns:1fr;}}
+			</style>
+
+			<div class="ais-stats">
+				<div class="ais-stat">
+					<div class="num"><?php echo number_format( $total_queries ); ?></div>
+					<div class="lbl">Σύνολο αναζητήσεων</div>
+				</div>
+				<div class="ais-stat">
+					<div class="num"><?php echo $today_queries; ?></div>
+					<div class="lbl">Σήμερα</div>
+				</div>
+				<div class="ais-stat">
+					<div class="num"><?php echo $week_queries; ?></div>
+					<div class="lbl">Τελ. 7 μέρες</div>
+				</div>
+				<div class="ais-stat <?php echo $cache_pct >= 50 ? 'good' : ''; ?>">
+					<div class="num"><?php echo $cache_pct; ?>%</div>
+					<div class="lbl">Cache hit rate</div>
+				</div>
+				<div class="ais-stat <?php echo $noresult_pct > 20 ? 'warn' : 'good'; ?>">
+					<div class="num"><?php echo $noresult_pct; ?>%</div>
+					<div class="lbl">Χωρίς αποτέλεσμα</div>
+				</div>
+				<div class="ais-stat">
+					<div class="num"><?php echo $avg_response; ?>ms</div>
+					<div class="lbl">Μέσος χρόνος</div>
+				</div>
+				<div class="ais-stat <?php echo $enhanced_total === $indexed_total && $indexed_total > 0 ? 'good' : ''; ?>">
+					<div class="num"><?php echo $enhanced_total; ?>/<?php echo $indexed_total; ?></div>
+					<div class="lbl">AI Enhanced</div>
+				</div>
+			</div>
+
+			<?php if ( ! empty( $daily ) ) : ?>
+			<div class="ais-panel" style="margin-bottom:24px;">
+				<h3>Αναζητήσεις ανά ημέρα — τελευταίες 14 μέρες</h3>
+				<?php $max = max( array_column( $daily, 'cnt' ) ); ?>
+				<?php foreach ( $daily as $d ) : $pct = $max > 0 ? round( ( $d->cnt / $max ) * 100 ) : 0; ?>
+				<div class="ais-bar-row">
+					<span class="lbl"><?php echo esc_html( $d->day ); ?></span>
+					<span class="bar"><span class="bar-fill" style="width:<?php echo $pct; ?>%"></span></span>
+					<span class="cnt"><?php echo (int) $d->cnt; ?></span>
+				</div>
+				<?php endforeach; ?>
+			</div>
+			<?php endif; ?>
+
+			<div class="ais-dash-grid">
+				<div class="ais-panel">
+					<h3>Top αναζητήσεις — 30 μέρες</h3>
+					<?php if ( empty( $top_queries ) ) : ?>
+						<p><em>Δεν υπάρχουν δεδομένα ακόμα.</em></p>
+					<?php else :
+						$max_q = max( array_column( $top_queries, 'cnt' ) );
+						foreach ( $top_queries as $q ) :
+							$pct = $max_q > 0 ? round( ( $q->cnt / $max_q ) * 100 ) : 0;
+					?>
+					<div class="ais-bar-row">
+						<span class="lbl" title="<?php echo esc_attr( $q->query ); ?>"><?php echo esc_html( $q->query ); ?></span>
+						<span class="bar"><span class="bar-fill" style="width:<?php echo $pct; ?>%"></span></span>
+						<span class="cnt"><?php echo (int) $q->cnt; ?></span>
+					</div>
+					<?php endforeach; endif; ?>
+				</div>
+
+				<div class="ais-panel">
+					<h3>Αναζητήσεις χωρίς αποτέλεσμα — 30 μέρες</h3>
+					<?php if ( empty( $failed_queries ) ) : ?>
+						<p style="color:#1a7431;"><em>✓ Όλες βρήκαν αποτέλεσμα!</em></p>
+					<?php else :
+						$max_f = max( array_column( $failed_queries, 'cnt' ) );
+						foreach ( $failed_queries as $q ) :
+							$pct = $max_f > 0 ? round( ( $q->cnt / $max_f ) * 100 ) : 0;
+					?>
+					<div class="ais-bar-row">
+						<span class="lbl" title="<?php echo esc_attr( $q->query ); ?>"><?php echo esc_html( $q->query ); ?></span>
+						<span class="bar"><span class="bar-fill" style="width:<?php echo $pct; ?>%;background:#b26200;"></span></span>
+						<span class="cnt"><?php echo (int) $q->cnt; ?></span>
+					</div>
+					<?php endforeach;
+					echo '<p style="margin-top:12px;font-size:12px;color:#888;">💡 Αυτές δεν βρήκαν σελίδα — σκέψου να προσθέσεις σχετικό περιεχόμενο ή keywords.</p>';
+					endif; ?>
+				</div>
+			</div>
+		</div>
+		<?php
+	}
 }
+
