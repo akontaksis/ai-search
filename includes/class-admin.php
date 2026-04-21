@@ -38,6 +38,30 @@ class Admin {
 		register_setting( 'ais_settings_group', 'ais_fallback_message', [
 			'sanitize_callback' => 'sanitize_textarea_field',
 		] );
+		register_setting( 'ais_settings_group', 'ais_post_types', [
+			'sanitize_callback' => [ $this, 'sanitize_post_types' ],
+		] );
+	}
+
+	public function sanitize_post_types( $value ): string {
+		if ( ! is_array( $value ) ) {
+			return 'page';
+		}
+
+		$allowed = array_keys( $this->get_indexable_post_types() );
+		$clean   = array_filter(
+			array_map( 'sanitize_key', $value ),
+			fn( $pt ) => in_array( $pt, $allowed, true )
+		);
+
+		return implode( ',', $clean ) ?: 'page';
+	}
+
+	private function get_indexable_post_types(): array {
+		$types = get_post_types( [ 'public' => true ], 'objects' );
+		// Exclude attachments — they have no meaningful content to search
+		unset( $types['attachment'] );
+		return $types;
 	}
 
 	public function sanitize_api_key( string $new_value ): string {
@@ -172,6 +196,29 @@ class Admin {
 							><?php echo esc_textarea( get_option( 'ais_fallback_message', 'Δεν βρέθηκε σχετική υπηρεσία.' ) ); ?></textarea>
 						</td>
 					</tr>
+					<tr>
+						<th scope="row">Post Types προς ευρετηρίαση</th>
+						<td>
+							<?php
+							$saved_types  = explode( ',', get_option( 'ais_post_types', 'page' ) );
+							$all_types    = $this->get_indexable_post_types();
+							foreach ( $all_types as $slug => $obj ) :
+								$checked = in_array( $slug, $saved_types, true );
+							?>
+							<label style="display:block;margin-bottom:4px;">
+								<input
+									type="checkbox"
+									name="ais_post_types[]"
+									value="<?php echo esc_attr( $slug ); ?>"
+									<?php checked( $checked ); ?>
+								>
+								<strong><?php echo esc_html( $obj->labels->name ); ?></strong>
+								<span style="color:#888;font-size:12px;">(<?php echo esc_html( $slug ); ?>)</span>
+							</label>
+							<?php endforeach; ?>
+							<p class="description">Επιλέξτε ποιοι τύποι περιεχομένου θα ευρετηριάζονται. Πατήστε "Re-index τώρα" μετά από κάθε αλλαγή.</p>
+						</td>
+					</tr>
 				</table>
 				<?php submit_button( 'Αποθήκευση' ); ?>
 			</form>
@@ -225,7 +272,11 @@ class Admin {
 		global $wpdb;
 		$table   = $wpdb->prefix . 'ai_search_index';
 		$entries = $wpdb->get_results(
-			"SELECT id, title, url, category, last_indexed FROM $table ORDER BY id DESC LIMIT 50"
+			$wpdb->prepare(
+				"SELECT id, post_id, title, url, description, keywords, category, service_type, priority, is_external, last_indexed
+				 FROM $table ORDER BY id DESC LIMIT %d",
+				50
+			)
 		);
 
 		if ( empty( $entries ) ) {
@@ -233,20 +284,90 @@ class Admin {
 			return;
 		}
 
-		echo '<h2>Ευρετηριασμένες Σελίδες (τελευταίες 50)</h2>';
-		echo '<table class="widefat striped"><thead><tr><th>ID</th><th>Τίτλος</th><th>Κατηγορία</th><th>Τελευταία ευρετηρίαση</th></tr></thead><tbody>';
-
-		foreach ( $entries as $entry ) {
-			printf(
-				'<tr><td>%d</td><td><a href="%s" target="_blank">%s</a></td><td>%s</td><td>%s</td></tr>',
-				(int) $entry->id,
-				esc_url( $entry->url ),
-				esc_html( $entry->title ),
-				esc_html( $entry->category ?? '—' ),
-				esc_html( $entry->last_indexed ?? '—' )
-			);
-		}
-
-		echo '</tbody></table>';
+		$total = (int) $wpdb->get_var( "SELECT COUNT(*) FROM $table" );
+		printf( '<h2>Ευρετηριασμένες Σελίδες <span style="font-weight:normal;color:#888;">(εμφανίζονται 50 από %d)</span></h2>', $total );
+		?>
+		<style>
+		.ais-index-table { font-size:13px; }
+		.ais-index-table td { vertical-align:top; padding:6px 8px !important; }
+		.ais-index-table .col-desc, .ais-index-table .col-kw { max-width:220px; color:#555; }
+		.ais-index-table .col-desc span, .ais-index-table .col-kw span { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:220px; cursor:help; }
+		.ais-badge { display:inline-block; padding:2px 7px; border-radius:10px; font-size:11px; font-weight:600; }
+		.ais-badge-cat { background:#e8f4fd; color:#0073aa; }
+		.ais-badge-type { background:#edfaed; color:#1a7431; }
+		.ais-badge-ext { background:#fff3cd; color:#856404; }
+		</style>
+		<table class="widefat striped ais-index-table">
+			<thead>
+				<tr>
+					<th>ID</th>
+					<th>Τίτλος</th>
+					<th class="col-desc">Περιγραφή</th>
+					<th class="col-kw">Keywords</th>
+					<th>Κατηγορία</th>
+					<th>Τύπος</th>
+					<th>Prior.</th>
+					<th>Ext.</th>
+					<th>Τελ. index</th>
+				</tr>
+			</thead>
+			<tbody>
+		<?php foreach ( $entries as $e ) : ?>
+				<tr>
+					<td><?php echo (int) $e->id; ?></td>
+					<td>
+						<a href="<?php echo esc_url( $e->url ); ?>" target="_blank">
+							<?php echo esc_html( $e->title ); ?>
+						</a>
+						<?php if ( $e->post_id ) : ?>
+							<br><small style="color:#aaa;">post #<?php echo (int) $e->post_id; ?></small>
+						<?php endif; ?>
+					</td>
+					<td class="col-desc">
+						<?php if ( $e->description ) : ?>
+							<span title="<?php echo esc_attr( $e->description ); ?>">
+								<?php echo esc_html( $e->description ); ?>
+							</span>
+						<?php else : ?>
+							<em style="color:#bbb;">—</em>
+						<?php endif; ?>
+					</td>
+					<td class="col-kw">
+						<?php if ( $e->keywords ) : ?>
+							<span title="<?php echo esc_attr( $e->keywords ); ?>">
+								<?php echo esc_html( $e->keywords ); ?>
+							</span>
+						<?php else : ?>
+							<em style="color:#bbb;">—</em>
+						<?php endif; ?>
+					</td>
+					<td>
+						<?php if ( $e->category ) : ?>
+							<span class="ais-badge ais-badge-cat"><?php echo esc_html( $e->category ); ?></span>
+						<?php else : ?>
+							<em style="color:#bbb;">—</em>
+						<?php endif; ?>
+					</td>
+					<td>
+						<?php if ( $e->service_type ) : ?>
+							<span class="ais-badge ais-badge-type"><?php echo esc_html( $e->service_type ); ?></span>
+						<?php else : ?>
+							<em style="color:#bbb;">—</em>
+						<?php endif; ?>
+					</td>
+					<td><?php echo (int) $e->priority; ?></td>
+					<td>
+						<?php if ( $e->is_external ) : ?>
+							<span class="ais-badge ais-badge-ext">ext</span>
+						<?php else : ?>
+							<span style="color:#bbb;">—</span>
+						<?php endif; ?>
+					</td>
+					<td style="white-space:nowrap;"><?php echo esc_html( $e->last_indexed ?? '—' ); ?></td>
+				</tr>
+		<?php endforeach; ?>
+			</tbody>
+		</table>
+		<?php
 	}
 }

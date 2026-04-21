@@ -20,16 +20,24 @@ class Indexer {
 	 * Returns the number of pages indexed.
 	 */
 	public function index_all(): int {
-		$pages = get_posts( [
-			'post_type'      => 'page',
+		$types = array_filter(
+			array_map( 'trim', explode( ',', get_option( 'ais_post_types', 'page' ) ) )
+		);
+
+		if ( empty( $types ) ) {
+			$types = [ 'page' ];
+		}
+
+		$posts = get_posts( [
+			'post_type'      => $types,
 			'post_status'    => 'publish',
 			'posts_per_page' => -1,
 			'fields'         => 'all',
 		] );
 
 		$count = 0;
-		foreach ( $pages as $page ) {
-			$this->index_post( $page );
+		foreach ( $posts as $post ) {
+			$this->index_post( $post );
 			$count++;
 		}
 
