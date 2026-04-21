@@ -1,34 +1,73 @@
-/* AI Search — Frontend JS (vanilla, no jQuery) */
+/* AI Search — Frontend JS v1.1 */
 
 (function () {
 	'use strict';
 
 	document.addEventListener('DOMContentLoaded', init);
 
-	function init() {
-		const wrapper   = document.querySelector('.ais-wrapper');
-		if (!wrapper) return;
+	// Example queries shown as chips — overridable via aisData.examples
+	var DEFAULT_EXAMPLES = [
+		'Πώς μπορώ να υποβάλω αίτηση;',
+		'Ποιες υπηρεσίες παρέχονται;',
+		'Πού απευθύνομαι για πληροφορίες;',
+	];
 
-		const form      = wrapper.querySelector('.ais-form');
-		const input     = wrapper.querySelector('.ais-input');
-		const btn       = wrapper.querySelector('.ais-btn');
-		const loading   = wrapper.querySelector('.ais-loading');
-		const errorBox  = wrapper.querySelector('.ais-error');
-		const results   = wrapper.querySelector('.ais-results');
-		const noResults = wrapper.querySelector('.ais-no-results');
+	function init() {
+		var wrapper = document.querySelector('.ais-wrapper');
+		if (!wrapper) return;
 
 		if (typeof aisData === 'undefined') {
 			console.error('AI Search: aisData not defined.');
 			return;
 		}
 
-		if (input && aisData.placeholder) {
+		var form      = wrapper.querySelector('.ais-form');
+		var input     = wrapper.querySelector('.ais-input');
+		var btn       = wrapper.querySelector('.ais-btn');
+		var loading   = wrapper.querySelector('.ais-loading');
+		var errorBox  = wrapper.querySelector('.ais-error');
+		var results   = wrapper.querySelector('.ais-results');
+		var noResults = wrapper.querySelector('.ais-no-results');
+		var examples  = wrapper.querySelector('.ais-examples');
+
+		if (aisData.placeholder) {
 			input.placeholder = aisData.placeholder;
+		}
+
+		// Animated placeholder cycling
+		var placeholders = aisData.placeholders || [];
+		if (placeholders.length > 1) {
+			var pi = 0;
+			setInterval(function () {
+				if (document.activeElement !== input) {
+					pi = (pi + 1) % placeholders.length;
+					input.placeholder = placeholders[pi];
+				}
+			}, 3000);
+		}
+
+		// Example chips
+		var chips = aisData.examples || DEFAULT_EXAMPLES;
+		if (examples && chips.length) {
+			chips.forEach(function (text) {
+				var chip = document.createElement('button');
+				chip.type = 'button';
+				chip.className = 'ais-chip';
+				chip.innerHTML =
+					'<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2L9.09 9.09 2 12l7.09 2.91L12 22l2.91-7.09L22 12l-7.09-2.91z"/></svg>' +
+					esc(text);
+				chip.addEventListener('click', function () {
+					input.value = text;
+					input.focus();
+					doSearch(text);
+				});
+				examples.appendChild(chip);
+			});
 		}
 
 		form.addEventListener('submit', function (e) {
 			e.preventDefault();
-			const query = input.value.trim();
+			var query = input.value.trim();
 			if (!query) return;
 			doSearch(query);
 		});
@@ -37,12 +76,12 @@
 			reset();
 			setLoading(true);
 
-			const body = new FormData();
+			var body = new FormData();
 			body.append('action', 'ais_search');
 			body.append('nonce', aisData.nonce);
 			body.append('query', query);
 
-			fetch(aisData.ajaxUrl, { method: 'POST', body })
+			fetch(aisData.ajaxUrl, { method: 'POST', body: body })
 				.then(function (r) {
 					if (!r.ok) throw new Error('HTTP ' + r.status);
 					return r.json();
@@ -55,7 +94,7 @@
 						return;
 					}
 
-					const items = response.data;
+					var items = response.data;
 
 					if (!items || items.length === 0) {
 						noResults.classList.add('visible');
@@ -89,30 +128,51 @@
 		}
 
 		function buildCard(item) {
-			const card = document.createElement('div');
+			var card = document.createElement('div');
 			card.className = 'ais-card';
 
+			// Top row: category + service type
+			var top = document.createElement('div');
+			top.className = 'ais-card-top';
+
 			if (item.category) {
-				const cat = document.createElement('span');
+				var cat = document.createElement('span');
 				cat.className = 'ais-category';
 				cat.textContent = item.category;
-				card.appendChild(cat);
+				top.appendChild(cat);
+			} else {
+				top.appendChild(document.createElement('span'));
 			}
 
-			const h3 = document.createElement('h3');
+			if (item.service_type) {
+				var typeMap = { info: 'Πληροφορία', action: 'Αίτηση', contact: 'Επικοινωνία', payment: 'Πληρωμή' };
+				var st = document.createElement('span');
+				st.className = 'ais-service-type';
+				st.textContent = typeMap[item.service_type] || item.service_type;
+				top.appendChild(st);
+			}
+
+			card.appendChild(top);
+
+			// Title
+			var h3 = document.createElement('h3');
 			h3.textContent = item.title;
 			card.appendChild(h3);
 
+			// Description
 			if (item.description) {
-				const p = document.createElement('p');
+				var p = document.createElement('p');
 				p.textContent = item.description;
 				card.appendChild(p);
 			}
 
-			const a = document.createElement('a');
+			// Link
+			var a = document.createElement('a');
 			a.className = 'ais-card-link';
 			a.href = safeUrl(item.url);
-			a.textContent = 'Μεταβείτε →';
+			a.innerHTML =
+				'Μεταβείτε' +
+				'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>';
 			card.appendChild(a);
 
 			return card;

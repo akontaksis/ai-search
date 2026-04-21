@@ -1,55 +1,111 @@
-/* AI Search — Frontend Styles */
+/* AI Search — Frontend Styles v1.1 */
 
 .ais-wrapper {
-	max-width: 640px;
+	max-width: 680px;
 	margin: 0 auto;
 	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* ── Header ───────────────────────────────────────── */
+
+.ais-header {
+	text-align: center;
+	margin-bottom: 20px;
+}
+
+.ais-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+	color: #fff;
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	padding: 5px 14px;
+	border-radius: 20px;
+	margin-bottom: 10px;
+}
+
+.ais-badge svg {
+	flex-shrink: 0;
+}
+
+.ais-subtitle {
+	margin: 0;
+	font-size: 15px;
+	color: #667085;
 }
 
 /* ── Form ─────────────────────────────────────────── */
 
 .ais-form {
+	margin-bottom: 14px;
+}
+
+.ais-input-wrap {
+	position: relative;
 	display: flex;
-	gap: 8px;
-	margin-bottom: 20px;
+	align-items: center;
+	background: #fff;
+	border: 2px solid #e4e7ec;
+	border-radius: 16px;
+	padding: 6px 6px 6px 16px;
+	gap: 10px;
+	transition: border-color 0.2s, box-shadow 0.2s;
+	box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.ais-input-wrap:focus-within {
+	border-color: #764ba2;
+	box-shadow: 0 0 0 4px rgba(118, 75, 162, 0.12), 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.ais-search-icon {
+	color: #9aa5b4;
+	flex-shrink: 0;
+	transition: color 0.2s;
+}
+
+.ais-input-wrap:focus-within .ais-search-icon {
+	color: #764ba2;
 }
 
 .ais-input {
 	flex: 1;
-	padding: 13px 16px;
-	font-size: 16px;
-	border: 2px solid #d0d5dd;
-	border-radius: 10px;
+	border: none;
 	outline: none;
-	transition: border-color 0.2s, box-shadow 0.2s;
+	font-size: 16px;
 	color: #1a1a2e;
-	background: #fff;
+	background: transparent;
+	padding: 8px 0;
+	min-width: 0;
 }
 
 .ais-input::placeholder {
-	color: #9aa5b4;
-}
-
-.ais-input:focus {
-	border-color: #1a56db;
-	box-shadow: 0 0 0 3px rgba(26, 86, 219, 0.15);
+	color: #b0bac7;
 }
 
 .ais-btn {
-	padding: 13px 24px;
-	background: #1a56db;
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 10px 20px;
+	background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 	color: #fff;
 	border: none;
-	border-radius: 10px;
-	font-size: 16px;
+	border-radius: 12px;
+	font-size: 15px;
 	font-weight: 600;
 	cursor: pointer;
-	transition: background 0.2s, transform 0.1s;
+	transition: opacity 0.2s, transform 0.1s;
 	white-space: nowrap;
+	flex-shrink: 0;
 }
 
 .ais-btn:hover:not(:disabled) {
-	background: #1348c8;
+	opacity: 0.9;
 }
 
 .ais-btn:active:not(:disabled) {
@@ -57,8 +113,44 @@
 }
 
 .ais-btn:disabled {
-	background: #9aa5b4;
+	opacity: 0.5;
 	cursor: not-allowed;
+}
+
+/* ── Example chips ────────────────────────────────── */
+
+.ais-examples {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-bottom: 20px;
+	min-height: 0;
+}
+
+.ais-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 5px 12px;
+	background: #f4f4f8;
+	border: 1px solid #e4e7ec;
+	border-radius: 20px;
+	font-size: 13px;
+	color: #555;
+	cursor: pointer;
+	transition: background 0.15s, border-color 0.15s, color 0.15s;
+	user-select: none;
+}
+
+.ais-chip:hover {
+	background: #ede9f8;
+	border-color: #c4b5fd;
+	color: #5b21b6;
+}
+
+.ais-chip svg {
+	flex-shrink: 0;
+	opacity: 0.5;
 }
 
 /* ── Loading ──────────────────────────────────────── */
@@ -66,28 +158,36 @@
 .ais-loading {
 	display: none;
 	align-items: center;
-	gap: 10px;
-	padding: 12px 0;
-	color: #667085;
-	font-size: 15px;
+	gap: 12px;
+	padding: 16px 0;
+	color: #764ba2;
+	font-size: 14px;
+	font-style: italic;
 }
 
 .ais-loading.visible {
 	display: flex;
 }
 
-.ais-spinner {
-	width: 20px;
-	height: 20px;
-	border: 2px solid #d0d5dd;
-	border-top-color: #1a56db;
-	border-radius: 50%;
-	animation: ais-spin 0.7s linear infinite;
-	flex-shrink: 0;
+.ais-dots {
+	display: flex;
+	gap: 4px;
 }
 
-@keyframes ais-spin {
-	to { transform: rotate(360deg); }
+.ais-dots span {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: #764ba2;
+	animation: ais-bounce 1.2s ease-in-out infinite;
+}
+
+.ais-dots span:nth-child(2) { animation-delay: 0.2s; }
+.ais-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes ais-bounce {
+	0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+	40%           { transform: scale(1);   opacity: 1;   }
 }
 
 /* ── Error ────────────────────────────────────────── */
@@ -96,7 +196,7 @@
 	display: none;
 	background: #fff3cd;
 	border: 1px solid #fbbf24;
-	border-radius: 8px;
+	border-radius: 10px;
 	padding: 12px 16px;
 	color: #92400e;
 	font-size: 14px;
@@ -118,31 +218,56 @@
 .ais-card {
 	background: #fff;
 	border: 1px solid #e4e7ec;
+	border-left: 4px solid #764ba2;
 	border-radius: 12px;
-	padding: 18px 20px;
-	box-shadow: 0 1px 4px rgba(16, 24, 40, 0.06);
-	transition: box-shadow 0.2s;
+	padding: 16px 20px;
+	box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+	transition: box-shadow 0.2s, transform 0.2s;
+	animation: ais-slide-in 0.3s ease both;
+}
+
+.ais-card:nth-child(2) { animation-delay: 0.08s; }
+.ais-card:nth-child(3) { animation-delay: 0.16s; }
+
+@keyframes ais-slide-in {
+	from { opacity: 0; transform: translateY(10px); }
+	to   { opacity: 1; transform: translateY(0); }
 }
 
 .ais-card:hover {
-	box-shadow: 0 4px 12px rgba(16, 24, 40, 0.1);
+	box-shadow: 0 6px 16px rgba(118, 75, 162, 0.12);
+	transform: translateY(-1px);
+}
+
+.ais-card-top {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 8px;
 }
 
 .ais-category {
-	display: inline-block;
-	background: #eff6ff;
-	color: #1a56db;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	background: #f3f0ff;
+	color: #5b21b6;
 	font-size: 11px;
 	font-weight: 700;
 	letter-spacing: 0.05em;
 	text-transform: uppercase;
 	padding: 3px 10px;
 	border-radius: 20px;
-	margin-bottom: 10px;
+}
+
+.ais-service-type {
+	font-size: 11px;
+	color: #9aa5b4;
+	font-weight: 500;
 }
 
 .ais-card h3 {
-	margin: 0 0 8px;
+	margin: 0 0 6px;
 	font-size: 17px;
 	font-weight: 700;
 	color: #101828;
@@ -159,42 +284,57 @@
 .ais-card-link {
 	display: inline-flex;
 	align-items: center;
-	gap: 4px;
-	color: #1a56db;
+	gap: 6px;
+	color: #764ba2;
 	text-decoration: none;
 	font-size: 14px;
 	font-weight: 600;
+	transition: gap 0.15s;
 }
 
 .ais-card-link:hover {
-	text-decoration: underline;
+	gap: 10px;
+}
+
+.ais-card-link svg {
+	transition: transform 0.15s;
+}
+
+.ais-card-link:hover svg {
+	transform: translateX(3px);
 }
 
 /* ── No Results ───────────────────────────────────── */
 
 .ais-no-results {
 	display: none;
+	flex-direction: column;
+	align-items: center;
 	text-align: center;
-	padding: 24px 16px;
+	padding: 32px 16px;
 	background: #f9fafb;
 	border-radius: 12px;
-	font-size: 15px;
 	color: #667085;
-	line-height: 1.6;
+	gap: 8px;
 }
 
 .ais-no-results.visible {
-	display: block;
+	display: flex;
+}
+
+.ais-no-results svg {
+	color: #c4b5fd;
+}
+
+.ais-no-results p {
+	margin: 0;
+	font-size: 15px;
+	line-height: 1.6;
 }
 
 /* ── Responsive ───────────────────────────────────── */
 
-@media (max-width: 480px) {
-	.ais-form {
-		flex-direction: column;
-	}
-
-	.ais-btn {
-		width: 100%;
-	}
+@media (max-width: 520px) {
+	.ais-btn span { display: none; }
+	.ais-btn      { padding: 10px 14px; }
 }

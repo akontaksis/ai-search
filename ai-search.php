@@ -137,11 +137,18 @@ function enqueue_frontend_assets(): void {
 		AIS_VERSION,
 		true
 	);
+	$examples_raw = get_option( 'ais_example_queries', '' );
+	$examples     = array_values( array_filter( array_map(
+		'trim',
+		explode( "\n", $examples_raw )
+	) ) );
+
 	wp_localize_script( 'ais-search', 'aisData', [
 		'ajaxUrl'     => admin_url( 'admin-ajax.php' ),
 		'nonce'       => wp_create_nonce( 'ais_search_nonce' ),
 		'placeholder' => get_option( 'ais_placeholder', 'Τι ψάχνετε;' ),
 		'fallback'    => get_option( 'ais_fallback_message', 'Δεν βρέθηκε σχετική υπηρεσία.' ),
+		'examples'    => $examples,
 	] );
 }
 

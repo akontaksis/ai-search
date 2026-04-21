@@ -49,6 +49,9 @@ class Admin {
 		register_setting( 'ais_settings_group', 'ais_post_types', [
 			'sanitize_callback' => [ $this, 'sanitize_post_types' ],
 		] );
+		register_setting( 'ais_settings_group', 'ais_example_queries', [
+			'sanitize_callback' => 'sanitize_textarea_field',
+		] );
 	}
 
 	public function sanitize_post_types( $value ): string {
@@ -202,6 +205,21 @@ class Admin {
 								rows="3"
 								class="regular-text"
 							><?php echo esc_textarea( get_option( 'ais_fallback_message', 'Δεν βρέθηκε σχετική υπηρεσία.' ) ); ?></textarea>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row">
+							<label for="ais_example_queries">Example chips (UI)</label>
+						</th>
+						<td>
+							<textarea
+								id="ais_example_queries"
+								name="ais_example_queries"
+								rows="4"
+								class="regular-text"
+								placeholder="Ένα παράδειγμα ανά γραμμή"
+							><?php echo esc_textarea( get_option( 'ais_example_queries', '' ) ); ?></textarea>
+							<p class="description">Εμφανίζονται ως κουμπιά κάτω από το search box. Ένα ερώτημα ανά γραμμή.</p>
 						</td>
 					</tr>
 					<tr>
