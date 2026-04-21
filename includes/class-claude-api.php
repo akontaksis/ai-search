@@ -18,11 +18,11 @@ class ClaudeAPI {
 	}
 
 	/**
-	 * Ask Claude to match a user query against candidate index entries.
+	 * Match a user query against candidate index entries.
 	 * Returns array of matching IDs, or WP_Error on failure.
 	 *
-	 * @param string   $query      The user's natural-language query.
-	 * @param object[] $candidates Rows from wp_ai_search_index.
+	 * @param string   $query
+	 * @param object[] $candidates
 	 * @return int[]|\WP_Error
 	 */
 	public function match( string $query, array $candidates ): array|\WP_Error {
@@ -30,8 +30,7 @@ class ClaudeAPI {
 
 		$list = '';
 		foreach ( $candidates as $entry ) {
-			// Truncate description to keep prompt compact and within rate limits
-			$desc = mb_substr( $entry->description ?? '', 0, 100 );
+			$desc  = mb_substr( $entry->description ?? '', 0, 100 );
 			$list .= sprintf( "ID:%d | %s | %s\n", $entry->id, $entry->title, $desc );
 		}
 
@@ -44,6 +43,57 @@ class ClaudeAPI {
 Απάντηση ΜΟΝΟ σε JSON: {"matches": [id1, id2]}
 PROMPT;
 
+		return $this->call( $prompt, 256 );
+	}
+
+	/**
+	 * AI-enhance a single index entry: generate description, keywords, category, service_type.
+	 * Returns associative array or WP_Error.
+	 *
+	 * @return array|\WP_Error
+	 */
+	public function enhance( string $title, string $content ): array|\WP_Error {
+		$site_name       = get_option( 'ais_site_name', get_bloginfo( 'name' ) );
+		$content_preview = mb_substr( $content, 0, 800 );
+
+		$prompt = <<<PROMPT
+Αυτό είναι περιεχόμενο από το site "{$site_name}".
+Τίτλος: {$title}
+Περιεχόμενο: {$content_preview}
+
+Επέστρεψε JSON με τα παρακάτω πεδία:
+{
+  "description": "1-2 προτάσεις που εξηγούν τι αφορά αυτή η σελίδα με απλά λόγια",
+  "keywords": ["λέξη1", "λέξη2"],
+  "category": "μία από: Παιδεία, Οικονομικά, Τεχνικά, Κοινωνικά, Υγεία, Αθλητισμός, Πολιτισμός, Περιβάλλον, Διοίκηση, Άλλο",
+  "service_type": "μία από: info, action, contact, payment"
+}
+
+Για τα keywords βάλε 8-12 λέξεις που θα έψαχνε ένας πολίτης για να βρει αυτή τη σελίδα.
+Απάντηση ΜΟΝΟ σε JSON.
+PROMPT;
+
+		$result = $this->call( $prompt, 512 );
+
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+
+		// $result here is the raw parsed array from the response
+		if ( ! isset( $result['description'] ) ) {
+			return new \WP_Error( 'ais_enhance_error', 'Μη έγκυρη απάντηση από το AI.' );
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Shared HTTP call to the Anthropic API.
+	 * For match() it returns int[], for enhance() it returns the raw decoded array.
+	 *
+	 * @return mixed|\WP_Error
+	 */
+	private function call( string $prompt, int $max_tokens ): mixed {
 		$response = wp_remote_post(
 			self::API_URL,
 			[
@@ -55,12 +105,9 @@ PROMPT;
 				],
 				'body'    => wp_json_encode( [
 					'model'      => self::MODEL,
-					'max_tokens' => 256,
+					'max_tokens' => $max_tokens,
 					'messages'   => [
-						[
-							'role'    => 'user',
-							'content' => $prompt,
-						],
+						[ 'role' => 'user', 'content' => $prompt ],
 					],
 				] ),
 			]
@@ -75,28 +122,29 @@ PROMPT;
 		$data = json_decode( $body, true );
 
 		if ( 200 !== $code ) {
-			$message = $data['error']['message'] ?? "API error (HTTP $code)";
-			return new \WP_Error( 'ais_api_error', $message );
+			return new \WP_Error( 'ais_api_error', $data['error']['message'] ?? "API error (HTTP $code)" );
 		}
 
 		$text = $data['content'][0]['text'] ?? '';
-
-		// Strip markdown code fences that some models add
 		$text = trim( preg_replace( '/^```(?:json)?\s*|\s*```$/m', '', trim( $text ) ) );
 
-		// Try to decode the full response first, then fall back to extracting the JSON object
 		$result = json_decode( $text, true );
 		if ( JSON_ERROR_NONE !== json_last_error() || ! is_array( $result ) ) {
-			// DOTALL flag so . matches newlines — handles multi-line JSON objects
-			if ( preg_match( '/\{.*\}/s', $text, $matches ) ) {
-				$result = json_decode( $matches[0], true );
+			if ( preg_match( '/\{.*\}/s', $text, $m ) ) {
+				$result = json_decode( $m[0], true );
 			}
 		}
 
-		if ( ! is_array( $result ) || ! isset( $result['matches'] ) || ! is_array( $result['matches'] ) ) {
+		if ( ! is_array( $result ) ) {
 			return new \WP_Error( 'ais_parse_error', 'Δεν ήταν δυνατή η ανάλυση της απάντησης.' );
 		}
 
-		return array_map( 'intval', $result['matches'] );
+		// match() response: extract matches array
+		if ( isset( $result['matches'] ) ) {
+			return array_map( 'intval', (array) $result['matches'] );
+		}
+
+		// enhance() response: return full array
+		return $result;
 	}
 }

@@ -2,6 +2,8 @@
 
 AI-powered natural language search για WordPress sites. Ο επισκέπτης γράφει αυτό που ψάχνει σε απλή γλώσσα και το plugin τον οδηγεί στη σωστή σελίδα.
 
+**Τρέχουσα έκδοση:** `1.1.0`
+
 ---
 
 ## Πώς λειτουργεί
@@ -11,9 +13,11 @@ AI-powered natural language search για WordPress sites. Ο επισκέπτη
         ↓
 Rate limit check (10 req/min ανά IP)
         ↓
-Φόρτωση top-50 εγγραφών από index
+Cache check (24h — ίδια ερώτηση επιστρέφει αμέσως)
         ↓
-Claude API (επιλέγει 1-3 σχετικές σελίδες)
+SQL pre-filter: LIKE στα keywords + title → top 15 σχετικές
+        ↓
+Claude Haiku: επιλέγει 1-3 σελίδες από τις 15
         ↓
 Εμφάνιση αποτελεσμάτων ως cards με link
 ```
@@ -42,14 +46,13 @@ Claude API (επιλέγει 1-3 σχετικές σελίδες)
 
 ## Εγκατάσταση
 
-1. Κατεβάστε ή κλωνοποιήστε τον φάκελο `ai-search/`
-2. Αντιγράψτε τον στο `wp-content/plugins/`
-3. Ενεργοποιήστε το plugin από το **WordPress Admin → Plugins**
-4. Μεταβείτε στο **Settings → AI Search** και ρυθμίστε:
-   - Anthropic API key
-   - Όνομα οργανισμού
-5. Πατήστε **Re-index τώρα**
-6. Προσθέστε το shortcode `[ai_search]` σε οποιαδήποτε σελίδα
+1. Αντιγράψτε τον φάκελο `ai-search/` στο `wp-content/plugins/`
+2. Ενεργοποιήστε το plugin από το **WordPress Admin → Plugins**
+3. Μεταβείτε στο **Settings → AI Search** και ρυθμίστε API key + όνομα οργανισμού
+4. Επιλέξτε ποιους **Post Types** θέλετε να ευρετηριάσετε
+5. Πατήστε **Re-index τώρα** (Βήμα 1)
+6. Πατήστε **AI Enhance** (Βήμα 2) για καλύτερα αποτελέσματα
+7. Προσθέστε το shortcode `[ai_search]` σε οποιαδήποτε σελίδα
 
 ---
 
@@ -59,6 +62,7 @@ Claude API (επιλέγει 1-3 σχετικές σελίδες)
 |---|---|---|
 | **Anthropic API Key** | Κλειδί για το Claude API. Αποθηκεύεται κρυπτογραφημένο (AES-256). | — |
 | **Όνομα οργανισμού** | Χρησιμοποιείται στο AI prompt για context. | Τίτλος site |
+| **Post Types** | Pages, Posts, custom post types προς ευρετηρίαση. | Pages |
 | **Placeholder κειμένου** | Το hint μέσα στο search box. | `Τι ψάχνετε;` |
 | **Μήνυμα χωρίς αποτέλεσμα** | Εμφανίζεται όταν δεν βρεθεί τίποτα. | `Δεν βρέθηκε σχετική υπηρεσία.` |
 
@@ -74,17 +78,42 @@ Claude API (επιλέγει 1-3 σχετικές σελίδες)
 
 ---
 
+## Ευρετηρίαση — 2 Βήματα
+
+### Βήμα 1: Basic Re-index
+Σκανάρει όλα τα επιλεγμένα post types και εξάγει βασικά keywords από το κείμενο. Δεν καλεί το Claude API.
+
+- Εξαγωγή κειμένου από Elementor (`_elementor_data` meta)
+- Περιγραφή: Excerpt → Yoast → πρώτες 30 λέξεις → τίτλος
+- Keywords: εξαγωγή λέξεων, αφαίρεση stop words, top-20
+
+### Βήμα 2: AI Enhancement ⭐
+Ο Claude Haiku διαβάζει κάθε σελίδα μία-μία και γεμίζει:
+
+| Πεδίο | Παράδειγμα |
+|---|---|
+| `description` | "Υπηρεσία για έκδοση αδειών οικοδομής και τακτοποίηση αυθαιρέτων" |
+| `keywords` | "άδεια, οικοδομή, δόμηση, αυθαίρετο, ρυμοτομία, κτίριο" |
+| `category` | "Τεχνικά" |
+| `service_type` | "action" |
+
+**Κατηγορίες:** Παιδεία, Οικονομικά, Τεχνικά, Κοινωνικά, Υγεία, Αθλητισμός, Πολιτισμός, Περιβάλλον, Διοίκηση, Άλλο
+
+**Τύποι υπηρεσίας:** `info` (πληροφορία), `action` (αίτηση/διαδικασία), `contact` (επικοινωνία), `payment` (πληρωμή)
+
+---
+
 ## Δομή Plugin
 
 ```
 ai-search/
 ├── ai-search.php               # Main plugin file, AJAX handlers, activation
 ├── includes/
-│   ├── class-indexer.php       # Σκανάρει WP pages, χτίζει το index
-│   ├── class-claude-api.php    # Κλήση Anthropic API
-│   ├── class-search.php        # Λογική αναζήτησης
+│   ├── class-indexer.php       # Basic + AI-enhanced indexing, Elementor support
+│   ├── class-claude-api.php    # match() + enhance() — Anthropic API calls
+│   ├── class-search.php        # SQL pre-filter + Claude matching + caching
 │   ├── class-crypto.php        # AES-256 κρυπτογράφηση API key
-│   └── class-admin.php         # Admin settings page
+│   └── class-admin.php         # Admin settings, re-index, AI enhance, table
 ├── assets/
 │   ├── css/search.css          # Responsive frontend styles
 │   └── js/search.js            # Vanilla JS, DOM-based, XSS-safe
@@ -98,10 +127,7 @@ ai-search/
 
 ## Database
 
-Δημιουργούνται 2 custom πίνακες κατά την ενεργοποίηση:
-
 ### `wp_ai_search_index`
-Αποθηκεύει τις ευρετηριασμένες σελίδες.
 
 | Πεδίο | Τύπος | Περιγραφή |
 |---|---|---|
@@ -109,16 +135,15 @@ ai-search/
 | `post_id` | BIGINT | WordPress post ID (NULL για εξωτερικά links) |
 | `title` | VARCHAR(255) | Τίτλος σελίδας |
 | `url` | VARCHAR(500) | Πλήρες URL |
-| `description` | TEXT | Περιγραφή (excerpt / Yoast / πρώτες 30 λέξεις) |
+| `description` | TEXT | Περιγραφή (AI-enhanced ή fallback chain) |
 | `keywords` | TEXT | Comma-separated λέξεις-κλειδιά |
-| `category` | VARCHAR(100) | Κατηγορία |
+| `category` | VARCHAR(100) | NULL = εκκρεμεί AI enhancement |
 | `service_type` | VARCHAR(50) | `info / action / contact / payment` |
 | `is_external` | TINYINT | 1 για εξωτερικά links |
-| `priority` | INT | Βαρύτητα (default: 5) |
+| `priority` | INT | Βαρύτητα στην αναζήτηση (default: 5) |
 | `last_indexed` | DATETIME | Τελευταία ευρετηρίαση |
 
 ### `wp_ai_search_log`
-Αποθηκεύει κάθε αναζήτηση για analytics.
 
 | Πεδίο | Τύπος | Περιγραφή |
 |---|---|---|
@@ -128,21 +153,6 @@ ai-search/
 | `cache_hit` | TINYINT | 1 αν απαντήθηκε από cache |
 | `response_time_ms` | INT | Χρόνος απόκρισης σε ms |
 | `created_at` | DATETIME | Timestamp |
-
----
-
-## Ευρετηρίαση (Indexer)
-
-Κατά το re-index, για κάθε published page:
-
-1. **Τίτλος** → από `post_title`
-2. **URL** → από `get_permalink()`
-3. **Περιγραφή** (fallback chain):
-   - Excerpt (αν υπάρχει)
-   - Yoast meta description (`_yoast_wpseo_metadesc`)
-   - Πρώτες 30 λέξεις από το content (stripped)
-   - Μόνο τίτλος (last resort)
-4. **Keywords** → εξαγωγή από τίτλο + content, αφαίρεση stop words, top-20 μοναδικές λέξεις
 
 ---
 
@@ -169,37 +179,35 @@ ai-search/
 
 | Σενάριο | Κόστος |
 |---|---|
-| Initial re-index (~200 σελίδες) | ~$0.00 (Φάση 1 δεν καλεί API για index) |
-| 100 αναζητήσεις/ημέρα (0% cache) | ~$0.05/ημέρα |
-| 100 αναζητήσεις/ημέρα (90% cache) | ~$0.005/ημέρα |
-| **~$1–2 / μήνα** για τυπικό δήμο | ✓ |
+| Basic re-index (~200 σελίδες) | $0.00 (δεν καλεί API) |
+| AI Enhancement (~200 σελίδες) | ~$0.10 (εφάπαξ) |
+| 100 αναζητήσεις/ημέρα (90% cache hit) | ~$0.005/ημέρα |
+| **~$1–2 / μήνα** για τυπικό οργανισμό | ✓ |
 
 ---
 
 ## Φάσεις Ανάπτυξης
 
-### ✅ Φάση 1 — MVP (Ολοκληρώθηκε)
-- Plugin scaffold + activation
-- Custom tables
-- Basic indexer (WP pages, χωρίς AI enhancement)
-- Claude API integration
-- Basic search (top-50 → Claude)
-- Shortcode + responsive frontend
-- Admin settings (API key, site name)
-- AES-256 encryption
-- Rate limiting + security hardening
+### ✅ Φάση 1 — MVP
+- Plugin scaffold + activation hooks
+- Custom DB tables (`wp_ai_search_index`, `wp_ai_search_log`)
+- Basic indexer (pages + configurable post types)
+- Claude API integration για αναζήτηση
+- Shortcode + responsive frontend (vanilla JS)
+- Admin: API key (AES-256), site name, post types, re-index
+- Caching 24h, rate limiting 10/min, security hardening
 
-### Φάση 2 — Intelligence
-- AI Enhancement: Claude βελτιώνει descriptions + keywords κατά το indexing
-- SQL pre-filtering με `LIKE` (top-15 candidates αντί top-50)
-- Caching με WP transients (24h TTL)
-- Elementor shortcode stripping
+### ✅ Φάση 2 — Intelligence
+- **SQL pre-filtering:** LIKE στα keywords + title πριν τον Claude
+- **AI Enhancement:** Claude γράφει description, keywords, category, service_type
+- **Elementor support:** εξαγωγή κειμένου από `_elementor_data` JSON meta
+- **Admin progress bar:** live ενημέρωση κατά το AI enhancement
+- Auto-invalidation cache μετά από enhancement
 
 ### Φάση 3 — Production-Ready
-- External links (non-WP pages)
+- External links (non-WP pages στον index)
 - Auto re-index on `save_post`
-- Multiple results display
-- Σφάλματα + logging βελτιώσεις
+- Error handling + logging βελτιώσεις
 
 ### Φάση 4 — Analytics & UX
 - Dashboard: top queries, failed queries, response times
@@ -214,14 +222,13 @@ ai-search/
 - **Frontend:** Vanilla JS (χωρίς jQuery), CSS3
 - **AI Model:** `claude-haiku-4-5-20251001`
 - **Storage:** Custom MySQL tables + WP transients
-- **Namespace:** `AISearch`
-- **Prefix:** `ais_`
+- **Namespace:** `AISearch` | **Prefix:** `ais_`
 
 ---
 
 ## Uninstall
 
-Κατά τη **διαγραφή** (όχι απλά deactivation) του plugin:
+Κατά τη **διαγραφή** (όχι απλά deactivation):
 - Drops `wp_ai_search_index` και `wp_ai_search_log`
 - Διαγράφει όλα τα options (`ais_*`)
 - Καθαρίζει τα cached transients
@@ -229,6 +236,14 @@ ai-search/
 ---
 
 ## Changelog
+
+### 1.1.0
+- SQL pre-filtering πριν τον Claude (15 candidates αντί 20 random)
+- AI Enhancement με progress bar στο admin
+- Elementor content extraction από `_elementor_data` meta
+- Configurable post types (pages, posts, custom)
+- Pagination στον admin index table (50/σελίδα)
+- Token reduction + query caching 24h
 
 ### 1.0.0
 - Initial MVP release

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: AI Search
  * Description: AI-powered natural language search για WordPress sites.
- * Version:     1.0.0
+ * Version:     1.1.0
  * Author:      Athanasios Kontaksis
  * Text Domain: ai-search
  * Requires at least: 6.0
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'AIS_VERSION', '1.0.0' );
+define( 'AIS_VERSION', '1.1.0' );
 define( 'AIS_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'AIS_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
@@ -90,6 +90,7 @@ function boot(): void {
 	add_action( 'wp_enqueue_scripts', __NAMESPACE__ . '\enqueue_frontend_assets' );
 	add_action( 'wp_ajax_ais_search', __NAMESPACE__ . '\handle_search' );
 	add_action( 'wp_ajax_nopriv_ais_search', __NAMESPACE__ . '\handle_search' );
+	add_action( 'wp_ajax_ais_enhance_next', __NAMESPACE__ . '\handle_enhance_next' );
 }
 
 function enqueue_frontend_assets(): void {
@@ -196,6 +197,32 @@ function log_query( string $query, $results, int $elapsed_ms ): void {
 		],
 		[ '%s', '%d', '%d', '%d', '%s' ]
 	);
+}
+
+function handle_enhance_next(): void {
+	check_ajax_referer( 'ais_enhance_nonce', 'nonce' );
+
+	if ( ! current_user_can( 'manage_options' ) ) {
+		wp_send_json_error( 'Δεν έχετε δικαίωμα.' );
+		return;
+	}
+
+	$api_key = Crypto::decrypt( get_option( 'ais_anthropic_api_key', '' ) );
+
+	if ( empty( $api_key ) ) {
+		wp_send_json_error( 'Ορίστε πρώτα το API key.' );
+		return;
+	}
+
+	$indexer = new Indexer( $api_key );
+	$result  = $indexer->enhance_next();
+
+	if ( is_wp_error( $result ) ) {
+		wp_send_json_error( $result->get_error_message() );
+		return;
+	}
+
+	wp_send_json_success( $result );
 }
 
 if ( is_admin() ) {

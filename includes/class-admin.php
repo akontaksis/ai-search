@@ -226,9 +226,32 @@ class Admin {
 			<hr>
 
 			<h2>Διαχείριση Ευρετηρίου</h2>
-			<p>Ευρετηριάζει όλες τις δημοσιευμένες σελίδες από την αρχή.</p>
+
+			<h3 style="margin-bottom:4px;">Βήμα 1 — Basic Re-index</h3>
+			<p style="margin-top:0;">Σκανάρει σελίδες/posts και εξάγει βασικά keywords από το κείμενο.</p>
 			<button id="ais-reindex-btn" class="button button-secondary">Re-index τώρα</button>
 			<span id="ais-reindex-status" style="margin-left:12px;color:#555;"></span>
+
+			<h3 style="margin-bottom:4px;margin-top:20px;">Βήμα 2 — AI Enhancement</h3>
+			<p style="margin-top:0;">
+				Ο Claude διαβάζει κάθε σελίδα και γράφει καλύτερα keywords, περιγραφή, κατηγορία και τύπο υπηρεσίας.<br>
+				<strong>Εκτελέστε μετά το Re-index.</strong> Κόστος: ~$0.01 ανά 20 σελίδες.
+			</p>
+			<?php
+			global $wpdb;
+			$pending = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}ai_search_index WHERE category IS NULL" );
+			$total   = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}ai_search_index" );
+			?>
+			<button id="ais-enhance-btn" class="button button-primary" <?php echo $pending === 0 ? 'disabled' : ''; ?>>
+				AI Enhance (<?php echo $pending; ?> εκκρεμούν)
+			</button>
+			<span id="ais-enhance-status" style="margin-left:12px;color:#555;"></span>
+			<div id="ais-enhance-progress" style="display:none;margin-top:8px;max-width:400px;">
+				<div style="background:#e0e0e0;border-radius:4px;height:12px;overflow:hidden;">
+					<div id="ais-enhance-bar" style="background:#0073aa;height:100%;width:0%;transition:width 0.3s;"></div>
+				</div>
+				<small id="ais-enhance-label" style="color:#555;"></small>
+			</div>
 
 			<hr>
 
@@ -263,6 +286,59 @@ class Admin {
 						btn.disabled = false;
 					});
 			});
+		})();
+
+		// AI Enhancement
+		(function () {
+			const btn      = document.getElementById('ais-enhance-btn');
+			const status   = document.getElementById('ais-enhance-status');
+			const progress = document.getElementById('ais-enhance-progress');
+			const bar      = document.getElementById('ais-enhance-bar');
+			const label    = document.getElementById('ais-enhance-label');
+			if (!btn) return;
+
+			const nonce    = '<?php echo esc_js( wp_create_nonce( 'ais_enhance_nonce' ) ); ?>';
+			const total    = <?php echo (int) $total; ?>;
+			let   done     = total - <?php echo (int) $pending; ?>;
+
+			btn.addEventListener('click', function () {
+				btn.disabled = true;
+				progress.style.display = 'block';
+				processNext();
+			});
+
+			function processNext() {
+				const data = new FormData();
+				data.append('action', 'ais_enhance_next');
+				data.append('nonce', nonce);
+
+				fetch(ajaxurl, { method: 'POST', body: data })
+					.then(r => r.json())
+					.then(res => {
+						if (!res.success) {
+							status.textContent = 'Σφάλμα: ' + res.data;
+							btn.disabled = false;
+							return;
+						}
+						done++;
+						const pct = total > 0 ? Math.round((done / total) * 100) : 100;
+						bar.style.width = pct + '%';
+						label.textContent = res.data.enhanced
+							? 'Επεξεργάστηκε: ' + res.data.enhanced + ' (' + done + '/' + total + ')'
+							: '';
+
+						if (res.data.remaining > 0) {
+							processNext();
+						} else {
+							status.textContent = '✓ Ολοκληρώθηκε! Ανανεώστε τη σελίδα.';
+							btn.textContent = 'AI Enhance (0 εκκρεμούν)';
+						}
+					})
+					.catch(() => {
+						status.textContent = 'Σφάλμα σύνδεσης. Δοκιμάστε ξανά.';
+						btn.disabled = false;
+					});
+			}
 		})();
 		</script>
 		<?php
