@@ -270,22 +270,36 @@ class Admin {
 
 	private function render_index_table(): void {
 		global $wpdb;
-		$table   = $wpdb->prefix . 'ai_search_index';
-		$entries = $wpdb->get_results(
-			$wpdb->prepare(
-				"SELECT id, post_id, title, url, description, keywords, category, service_type, priority, is_external, last_indexed
-				 FROM $table ORDER BY id DESC LIMIT %d",
-				50
-			)
-		);
+		$table    = $wpdb->prefix . 'ai_search_index';
+		$per_page = 50;
+		$total    = (int) $wpdb->get_var( "SELECT COUNT(*) FROM $table" );
 
-		if ( empty( $entries ) ) {
+		if ( 0 === $total ) {
 			echo '<p><em>Το ευρετήριο είναι άδειο. Πατήστε "Re-index τώρα".</em></p>';
 			return;
 		}
 
-		$total = (int) $wpdb->get_var( "SELECT COUNT(*) FROM $table" );
-		printf( '<h2>Ευρετηριασμένες Σελίδες <span style="font-weight:normal;color:#888;">(εμφανίζονται 50 από %d)</span></h2>', $total );
+		$total_pages = (int) ceil( $total / $per_page );
+		$current     = max( 1, min( $total_pages, (int) ( $_GET['ais_paged'] ?? 1 ) ) );
+		$offset      = ( $current - 1 ) * $per_page;
+
+		$entries = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT id, post_id, title, url, description, keywords, category, service_type, priority, is_external, last_indexed
+				 FROM $table ORDER BY id DESC LIMIT %d OFFSET %d",
+				$per_page,
+				$offset
+			)
+		);
+
+		$base_url = add_query_arg( [ 'page' => 'ais-settings' ], admin_url( 'options-general.php' ) );
+
+		printf(
+			'<h2>Ευρετηριασμένες Σελίδες <span style="font-weight:normal;color:#888;">(%d-%d από %d)</span></h2>',
+			$offset + 1,
+			min( $offset + $per_page, $total ),
+			$total
+		);
 		?>
 		<style>
 		.ais-index-table { font-size:13px; }
@@ -312,6 +326,25 @@ class Admin {
 				</tr>
 			</thead>
 			<tbody>
+		<?php if ( $total_pages > 1 ) : ?>
+		<div style="margin-bottom:8px;">
+			<?php if ( $current > 1 ) : ?>
+				<a class="button" href="<?php echo esc_url( add_query_arg( 'ais_paged', $current - 1, $base_url ) ); ?>">← Προηγούμενη</a>
+			<?php endif; ?>
+			<?php for ( $p = 1; $p <= $total_pages; $p++ ) : ?>
+				<?php if ( $p === $current ) : ?>
+					<span class="button button-primary" style="cursor:default;"><?php echo $p; ?></span>
+				<?php elseif ( $p === 1 || $p === $total_pages || abs( $p - $current ) <= 2 ) : ?>
+					<a class="button" href="<?php echo esc_url( add_query_arg( 'ais_paged', $p, $base_url ) ); ?>"><?php echo $p; ?></a>
+				<?php elseif ( abs( $p - $current ) === 3 ) : ?>
+					<span style="padding:0 4px;">…</span>
+				<?php endif; ?>
+			<?php endfor; ?>
+			<?php if ( $current < $total_pages ) : ?>
+				<a class="button" href="<?php echo esc_url( add_query_arg( 'ais_paged', $current + 1, $base_url ) ); ?>">Επόμενη →</a>
+			<?php endif; ?>
+		</div>
+		<?php endif; ?>
 		<?php foreach ( $entries as $e ) : ?>
 				<tr>
 					<td><?php echo (int) $e->id; ?></td>
@@ -368,6 +401,18 @@ class Admin {
 		<?php endforeach; ?>
 			</tbody>
 		</table>
+
+		<?php if ( $total_pages > 1 ) : ?>
+		<div style="margin-top:8px;">
+			<?php if ( $current > 1 ) : ?>
+				<a class="button" href="<?php echo esc_url( add_query_arg( 'ais_paged', $current - 1, $base_url ) ); ?>">← Προηγούμενη</a>
+			<?php endif; ?>
+			<span style="margin:0 8px;color:#555;">Σελίδα <?php echo $current; ?> από <?php echo $total_pages; ?></span>
+			<?php if ( $current < $total_pages ) : ?>
+				<a class="button" href="<?php echo esc_url( add_query_arg( 'ais_paged', $current + 1, $base_url ) ); ?>">Επόμενη →</a>
+			<?php endif; ?>
+		</div>
+		<?php endif; ?>
 		<?php
 	}
 }

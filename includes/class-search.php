@@ -11,8 +11,8 @@ class Search {
 	private ClaudeAPI $claude;
 	private string $table;
 
-	// Phase 1: no pre-filtering — send top 50 by priority to Claude
-	private const CANDIDATE_LIMIT = 50;
+	private const CANDIDATE_LIMIT = 20;
+	private const CACHE_TTL       = DAY_IN_SECONDS;
 
 	public function __construct( string $api_key ) {
 		global $wpdb;
@@ -22,11 +22,18 @@ class Search {
 
 	/**
 	 * Find the best matching pages for a natural-language query.
-	 * Returns array of result arrays, or WP_Error on failure.
+	 * Results are cached per query for 24h to minimise API calls.
 	 *
 	 * @return array[]|\WP_Error
 	 */
 	public function find( string $query ): array|\WP_Error {
+		// Cache check — same query returns instantly without API call
+		$cache_key = 'ais_q_' . md5( $query );
+		$cached    = get_transient( $cache_key );
+		if ( false !== $cached ) {
+			return $cached;
+		}
+
 		global $wpdb;
 
 		$candidates = $wpdb->get_results( $wpdb->prepare(
@@ -48,6 +55,7 @@ class Search {
 		}
 
 		if ( empty( $matched_ids ) ) {
+			set_transient( $cache_key, [], self::CACHE_TTL );
 			return [];
 		}
 
@@ -72,6 +80,8 @@ class Search {
 				'service_type' => $entry->service_type,
 			];
 		}
+
+		set_transient( $cache_key, $results, self::CACHE_TTL );
 
 		return $results;
 	}

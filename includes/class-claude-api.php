@@ -30,12 +30,9 @@ class ClaudeAPI {
 
 		$list = '';
 		foreach ( $candidates as $entry ) {
-			$list .= sprintf(
-				"ID:%d | %s | %s\n",
-				$entry->id,
-				$entry->title,
-				$entry->description ?? ''
-			);
+			// Truncate description to keep prompt compact and within rate limits
+			$desc = mb_substr( $entry->description ?? '', 0, 100 );
+			$list .= sprintf( "ID:%d | %s | %s\n", $entry->id, $entry->title, $desc );
 		}
 
 		$prompt = <<<PROMPT
