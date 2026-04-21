@@ -29,8 +29,7 @@ class Search {
 
 	/**
 	 * Find the best matching pages for a natural-language query.
-	 * Phase 2: SQL pre-filtering by keywords/title before sending to Claude.
-	 * Results cached per query for 24h.
+	 * Phase 2: FULLTEXT pre-filter → Claude ranking → 24h cache.
 	 *
 	 * @return array[]|\WP_Error
 	 */
@@ -85,8 +84,7 @@ class Search {
 	}
 
 	/**
-	 * Phase 2: SQL pre-filter — search keywords + title with LIKE before Claude.
-	 * Falls back to top-N by priority when no keyword matches are found.
+	 * FULLTEXT search with automatic fallback to LIKE if index is missing or query is empty.
 	 */
 	private function get_candidates( string $query ): array {
 		global $wpdb;
@@ -98,16 +96,35 @@ class Search {
 		) ) );
 
 		if ( ! empty( $words ) ) {
-			$conditions = [];
-			$params     = [];
+			// FULLTEXT BOOLEAN MODE: "αγρότης* παραγωγή*" — prefix wildcard per word
+			$search_str = implode( ' ', array_map( fn( $w ) => $w . '*', $words ) );
 
-			foreach ( $words as $word ) {
-				$like          = '%' . $wpdb->esc_like( $word ) . '%';
-				$conditions[]  = '(keywords LIKE %s OR title LIKE %s)';
-				$params[]      = $like;
-				$params[]      = $like;
+			// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+			$candidates = $wpdb->get_results( $wpdb->prepare(
+				"SELECT id, post_id, title, url, description, category, service_type,
+				        MATCH(title, keywords) AGAINST(%s IN BOOLEAN MODE) AS relevance
+				 FROM {$this->table}
+				 WHERE MATCH(title, keywords) AGAINST(%s IN BOOLEAN MODE)
+				 ORDER BY relevance DESC, priority DESC
+				 LIMIT %d",
+				$search_str,
+				$search_str,
+				self::CANDIDATE_LIMIT
+			) );
+
+			if ( ! empty( $candidates ) ) {
+				return $candidates;
 			}
 
+			// FULLTEXT found nothing — fall back to LIKE
+			$conditions = [];
+			$params     = [];
+			foreach ( $words as $word ) {
+				$like         = '%' . $wpdb->esc_like( $word ) . '%';
+				$conditions[] = '(keywords LIKE %s OR title LIKE %s)';
+				$params[]     = $like;
+				$params[]     = $like;
+			}
 			$where    = implode( ' OR ', $conditions );
 			$params[] = self::CANDIDATE_LIMIT;
 
@@ -126,7 +143,7 @@ class Search {
 			}
 		}
 
-		// Fallback: no keyword match — send top N by priority
+		// Final fallback: no word matches — send top N by priority
 		return $wpdb->get_results( $wpdb->prepare(
 			"SELECT id, post_id, title, url, description, category, service_type
 			 FROM {$this->table}

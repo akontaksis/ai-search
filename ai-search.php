@@ -30,6 +30,7 @@ register_deactivation_hook( __FILE__, __NAMESPACE__ . '\deactivate' );
 
 function activate(): void {
 	create_tables();
+	setup_fulltext();
 	flush_rewrite_rules();
 }
 
@@ -77,10 +78,39 @@ function create_tables(): void {
 	dbDelta( $sql_log );
 }
 
+/**
+ * Add FULLTEXT index on title + keywords for existing installs.
+ * Safe to run multiple times — checks if index already exists.
+ */
+function setup_fulltext(): void {
+	global $wpdb;
+	$table = $wpdb->prefix . 'ai_search_index';
+
+	$exists = $wpdb->get_var( $wpdb->prepare(
+		"SELECT COUNT(*) FROM information_schema.STATISTICS
+		 WHERE table_schema = %s AND table_name = %s AND index_name = 'ft_search'",
+		DB_NAME,
+		$table
+	) );
+
+	if ( ! $exists ) {
+		$wpdb->query( "ALTER TABLE {$table} ADD FULLTEXT INDEX ft_search (title, keywords)" );
+	}
+}
+
 add_action( 'plugins_loaded', __NAMESPACE__ . '\load_textdomain' );
+add_action( 'plugins_loaded', __NAMESPACE__ . '\maybe_upgrade' );
 
 function load_textdomain(): void {
 	load_plugin_textdomain( 'ai-search', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
+}
+
+function maybe_upgrade(): void {
+	// Run once per DB version — adds FULLTEXT index to existing installs
+	if ( get_option( 'ais_db_version' ) !== '1.1' ) {
+		setup_fulltext();
+		update_option( 'ais_db_version', '1.1' );
+	}
 }
 
 add_action( 'init', __NAMESPACE__ . '\boot' );
