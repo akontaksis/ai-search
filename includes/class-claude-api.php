@@ -84,13 +84,20 @@ PROMPT;
 
 		$text = $data['content'][0]['text'] ?? '';
 
-		if ( ! preg_match( '/\{[^}]+\}/', $text, $matches ) ) {
-			return new \WP_Error( 'ais_parse_error', 'Δεν ήταν δυνατή η ανάλυση της απάντησης.' );
+		// Strip markdown code fences that some models add
+		$text = trim( preg_replace( '/^```(?:json)?\s*|\s*```$/m', '', trim( $text ) ) );
+
+		// Try to decode the full response first, then fall back to extracting the JSON object
+		$result = json_decode( $text, true );
+		if ( JSON_ERROR_NONE !== json_last_error() || ! is_array( $result ) ) {
+			// DOTALL flag so . matches newlines — handles multi-line JSON objects
+			if ( preg_match( '/\{.*\}/s', $text, $matches ) ) {
+				$result = json_decode( $matches[0], true );
+			}
 		}
 
-		$result = json_decode( $matches[0], true );
-		if ( ! isset( $result['matches'] ) || ! is_array( $result['matches'] ) ) {
-			return [];
+		if ( ! is_array( $result ) || ! isset( $result['matches'] ) || ! is_array( $result['matches'] ) ) {
+			return new \WP_Error( 'ais_parse_error', 'Δεν ήταν δυνατή η ανάλυση της απάντησης.' );
 		}
 
 		return array_map( 'intval', $result['matches'] );

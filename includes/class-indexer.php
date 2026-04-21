@@ -56,10 +56,12 @@ class Indexer {
 			$post->ID
 		) );
 
+		$formats = [ '%d', '%s', '%s', '%s', '%s', '%s' ];
+
 		if ( $existing_id ) {
-			$wpdb->update( $this->table, $data, [ 'id' => $existing_id ] );
+			$wpdb->update( $this->table, $data, [ 'id' => $existing_id ], $formats, [ '%d' ] );
 		} else {
-			$wpdb->insert( $this->table, $data );
+			$wpdb->insert( $this->table, $data, $formats );
 		}
 	}
 

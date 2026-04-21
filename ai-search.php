@@ -77,6 +77,12 @@ function create_tables(): void {
 	dbDelta( $sql_log );
 }
 
+add_action( 'plugins_loaded', __NAMESPACE__ . '\load_textdomain' );
+
+function load_textdomain(): void {
+	load_plugin_textdomain( 'ai-search', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
+}
+
 add_action( 'init', __NAMESPACE__ . '\boot' );
 
 function boot(): void {
@@ -117,22 +123,30 @@ function render_shortcode(): string {
 function handle_search(): void {
 	check_ajax_referer( 'ais_search_nonce', 'nonce' );
 
+	if ( is_rate_limited() ) {
+		wp_send_json_error( 'Πολλές αναζητήσεις. Δοκιμάστε ξανά σε λίγο.' );
+		return;
+	}
+
 	$query = sanitize_text_field( wp_unslash( $_POST['query'] ?? '' ) );
 
-	if ( empty( $query ) ) {
-		wp_send_json_error( 'Παρακαλώ εισάγετε ερώτημα.' );
+	if ( empty( $query ) || mb_strlen( $query ) > 300 ) {
+		wp_send_json_error( 'Παρακαλώ εισάγετε έγκυρο ερώτημα (έως 300 χαρακτήρες).' );
+		return;
 	}
 
 	$api_key_stored = get_option( 'ais_anthropic_api_key', '' );
 
 	if ( empty( $api_key_stored ) ) {
 		wp_send_json_error( 'Το API key δεν έχει ρυθμιστεί.' );
+		return;
 	}
 
 	$api_key = Crypto::decrypt( $api_key_stored );
 
 	if ( empty( $api_key ) ) {
 		wp_send_json_error( 'Δεν ήταν δυνατή η ανάκτηση του API key. Ορίστε το ξανά στις ρυθμίσεις.' );
+		return;
 	}
 
 	$start   = microtime( true );
@@ -144,9 +158,23 @@ function handle_search(): void {
 
 	if ( is_wp_error( $results ) ) {
 		wp_send_json_error( $results->get_error_message() );
+		return;
 	}
 
 	wp_send_json_success( $results );
+}
+
+function is_rate_limited(): bool {
+	$ip    = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+	$key   = 'ais_rate_' . md5( $ip );
+	$count = (int) get_transient( $key );
+
+	if ( $count >= 10 ) {
+		return true;
+	}
+
+	set_transient( $key, $count + 1, MINUTE_IN_SECONDS );
+	return false;
 }
 
 function log_query( string $query, $results, int $elapsed_ms ): void {
@@ -165,7 +193,8 @@ function log_query( string $query, $results, int $elapsed_ms ): void {
 			'cache_hit'        => 0,
 			'response_time_ms' => $elapsed_ms,
 			'created_at'       => current_time( 'mysql' ),
-		]
+		],
+		[ '%s', '%d', '%d', '%d', '%s' ]
 	);
 }
 

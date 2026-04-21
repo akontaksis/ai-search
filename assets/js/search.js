@@ -17,6 +17,11 @@
 		const results   = wrapper.querySelector('.ais-results');
 		const noResults = wrapper.querySelector('.ais-no-results');
 
+		if (typeof aisData === 'undefined') {
+			console.error('AI Search: aisData not defined.');
+			return;
+		}
+
 		if (input && aisData.placeholder) {
 			input.placeholder = aisData.placeholder;
 		}
@@ -87,19 +92,28 @@
 			const card = document.createElement('div');
 			card.className = 'ais-card';
 
-			const categoryHtml = item.category
-				? '<span class="ais-category">' + esc(item.category) + '</span>'
-				: '';
+			if (item.category) {
+				const cat = document.createElement('span');
+				cat.className = 'ais-category';
+				cat.textContent = item.category;
+				card.appendChild(cat);
+			}
 
-			const descHtml = item.description
-				? '<p>' + esc(item.description) + '</p>'
-				: '';
+			const h3 = document.createElement('h3');
+			h3.textContent = item.title;
+			card.appendChild(h3);
 
-			card.innerHTML =
-				categoryHtml +
-				'<h3>' + esc(item.title) + '</h3>' +
-				descHtml +
-				'<a class="ais-card-link" href="' + safeUrl(item.url) + '">Μεταβείτε →</a>';
+			if (item.description) {
+				const p = document.createElement('p');
+				p.textContent = item.description;
+				card.appendChild(p);
+			}
+
+			const a = document.createElement('a');
+			a.className = 'ais-card-link';
+			a.href = safeUrl(item.url);
+			a.textContent = 'Μεταβείτε →';
+			card.appendChild(a);
 
 			return card;
 		}

@@ -75,6 +75,7 @@ class Admin {
 
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_send_json_error( 'Δεν έχετε δικαίωμα.' );
+			return;
 		}
 
 		$indexer = new Indexer();

@@ -21,6 +21,10 @@ class Crypto {
 			return '';
 		}
 
+		if ( ! extension_loaded( 'openssl' ) ) {
+			return '';
+		}
+
 		$key       = self::derive_key();
 		$iv        = random_bytes( self::IV_LEN );
 		$encrypted = openssl_encrypt( $plaintext, self::CIPHER, $key, OPENSSL_RAW_DATA, $iv );
@@ -34,6 +38,10 @@ class Crypto {
 
 	public static function decrypt( string $ciphertext ): string {
 		if ( '' === $ciphertext ) {
+			return '';
+		}
+
+		if ( ! extension_loaded( 'openssl' ) ) {
 			return '';
 		}
 
