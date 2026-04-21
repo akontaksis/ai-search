@@ -1,0 +1,16 @@
+# WordPress
+wp-config.php
+wp-content/uploads/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Composer / Node (αν προστεθούν αργότερα)
+vendor/
+node_modules/
